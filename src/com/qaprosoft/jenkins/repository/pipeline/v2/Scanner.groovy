@@ -78,7 +78,7 @@ class Scanner extends Executor {
 				if (prChecker) {
 					// PR_Checker is supported only for the repo with single sub_project!
 					context.println("Launching Create-PR-Checker job for " + project)
-					context.build job: 'Management_Jobs/Create-PR-Checker', \
+					context.build job: 'Management_Jobs-alpha/Create-PR-Checker', \
 							parameters: [context.string(name: 'project', value: project), context.string(name: 'sub_project', value: sub_project)], \
 							wait: false
 				}
@@ -95,7 +95,7 @@ class Scanner extends Executor {
 				//TODO: #2 declare global list for created regression cron jobs
 				//	   provide extra flag includeIntoCron for CreateJob
 				List<String> crons = []
-				context.build job: "Management_Jobs/CreateView",
+				context.build job: "Management_Jobs-alpha/CreateView",
 					propagate: false,
 					parameters: [context.string(name: 'folder', value: jobFolder), context.string(name: 'view', value: 'CRON'), context.string(name: 'descFilter', value: 'cron'),]
 
@@ -134,7 +134,7 @@ class Scanner extends Executor {
 						
 						if (!views.contains(project.toUpperCase())) {
 							views << project.toUpperCase()
-							context.build job: "Management_Jobs/CreateView",
+							context.build job: "Management_Jobs-alpha/CreateView",
 								propagate: false,
 								parameters: [context.string(name: 'folder', value: jobFolder), context.string(name: 'view', value: project.toUpperCase()), context.string(name: 'descFilter', value: project),]
 						}
@@ -144,7 +144,7 @@ class Scanner extends Executor {
 						if (!views.contains(zafira_project)) {
 							views << zafira_project
 
-							context.build job: "Management_Jobs/CreateView",
+							context.build job: "Management_Jobs-alpha/CreateView",
 								propagate: false,
 								parameters: [context.string(name: 'folder', value: jobFolder), context.string(name: 'view', value: zafira_project), context.string(name: 'descFilter', value: zafira_project),]
 						}
@@ -152,7 +152,7 @@ class Scanner extends Executor {
 						if (!views.contains(suiteOwner)) {
 							views << suiteOwner
 
-							context.build job: "Management_Jobs/CreateView",
+							context.build job: "Management_Jobs-alpha/CreateView",
 								propagate: false,
 								parameters: [context.string(name: 'folder', value: jobFolder), context.string(name: 'view', value: suiteOwner), context.string(name: 'descFilter', value: suiteOwner),]
 						}
@@ -167,7 +167,7 @@ class Scanner extends Executor {
 							crons << cronName
 						}
 
-						context.build job: "Management_Jobs/CreateJob",
+						context.build job: "Management_Jobs-alpha/CreateJob",
 							propagate: false,
 							parameters: [
 								context.string(name: 'jobFolder', value: jobFolder),
