@@ -350,11 +350,11 @@ class Runner extends Executor {
 			if (context.isUnix()) {
 				def suiteNameForUnix = params.get("suite").replace("\\", "/")
 				context.echo "Suite for Unix: ${suiteNameForUnix}"
-				context.sh "'mvn' -B -U ${goals} -Dsuite=${suiteNameForUnix} -Dzafira_report_folder=./reports/qa -Dreport_url=$JOB_URL$BUILD_NUMBER/eTAF_Report"
+				context.sh "'mvn' -B -U ${goals} -Dsuite=${suiteNameForUnix} -Dzafira_report_folder=../reports/qa -Dreport_url=$JOB_URL$BUILD_NUMBER/eTAF_Report"
 			} else {
 				def suiteNameForWindows = "${suite}".replace("/", "\\")
 				context.echo "Suite for Windows: ${suiteNameForWindows}"
-				context.bat "mvn -B -U ${mvnBaseGoals} -Dsuite=${suiteNameForWindows} -Dzafira_report_folder=./reports/qa -Dreport_url=$JOB_URL$BUILD_NUMBER/eTAF_Report"
+				context.bat "mvn -B -U ${mvnBaseGoals} -Dsuite=${suiteNameForWindows} -Dzafira_report_folder=../reports/qa -Dreport_url=$JOB_URL$BUILD_NUMBER/eTAF_Report"
 			}
 
 			this.setJobResults(context.currentBuild)
