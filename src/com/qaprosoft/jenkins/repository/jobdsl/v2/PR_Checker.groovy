@@ -27,6 +27,7 @@ void createPRCheckerJob() {
   
   def jobName = "${jobFolder}/${repositoryName}"
     job(jobName) {
+			label("master")
             logRotator(-1, 100)
       		concurrentBuild()
             properties {
