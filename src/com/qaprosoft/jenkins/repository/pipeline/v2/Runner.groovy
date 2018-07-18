@@ -61,16 +61,12 @@ class Runner extends Executor {
 						this.prepare(context.currentBuild)
 						scmClient.clone()
 
-						this.downloadResources()
-
 						def timeoutValue = Configurator.get(Configurator.Parameter.JOB_MAX_RUN_TIME)
 						context.timeout(time: timeoutValue.toInteger(), unit: 'MINUTES') {
 							  this.build()
 							  //this.test()
 						}
 
-						//TODO: think about seperate stage for uploading jacoco reports
-						this.publishJacocoReport()
 					}
 					
 				} catch (Exception ex) {
@@ -78,14 +74,14 @@ class Runner extends Executor {
 					String failureReason = getFailure(context.currentBuild)
 					context.echo "failureReason: ${failureReason}"
 					//explicitly execute abort to resolve anomalies with in_progress tests...
-					zc.abortZafiraTestRun(uuid, failureReason)
+//					zc.abortZafiraTestRun(uuid, failureReason)
 					throw ex
 				} finally {
-                    this.exportZafiraReport()
+//                    this.exportZafiraReport()
                     this.reportingResults()
                     //TODO: send notification via email, slack, hipchat and whatever... based on subscrpition rules
                     this.sendTestRunResultsEmail(emailList, failureEmailList)
-                    this.clean()
+//                    this.clean()
                 }
 			}
 		}
@@ -138,23 +134,6 @@ class Runner extends Executor {
 		}
 	}
 
-	protected void downloadResources() {
-		//DO NOTHING as of now
-
-/*		def CARINA_CORE_VERSION = Configurator.get(Configurator.Parameter.CARINA_CORE_VERSION)
-		context.stage("Download Resources") {
-		def pomFile = getSubProjectFolder() + "/pom.xml"
-		context.echo "pomFile: " + pomFile
-			if (context.isUnix()) {
-				context.sh "'mvn' -B -U -f ${pomFile} clean process-resources process-test-resources -Dcarina-core_version=$CARINA_CORE_VERSION"
-			} else {
-				//TODO: verify that forward slash is ok for windows nodes.
-				context.bat(/"mvn" -B -U -f ${pomFile} clean process-resources process-test-resources -Dcarina-core_version=$CARINA_CORE_VERSION/)
-			}
-		}
-*/	}
-
-
 	protected void getResources() {
 		context.echo "Do nothing in default implementation"
 	}
@@ -162,123 +141,19 @@ class Runner extends Executor {
 	protected void build() {
 		context.stage('Build Stage') {
 			if (context.isUnix()) {
-				context.sh "cd docker_env"
-				context.sh "docker-compose down"
-				context.sh "docker-compose up -d --build php-fpm apache2"
+				context.sh "pwd"
+				context.sh "cd ${getWorkspace()}/docker_env"
+				context.sh "pwd"
+				
+				//context.sh "cd docker_env"
+				//context.sh "docker-compose down"
+				//context.sh "docker-compose up -d --build php-fpm apache2"
 			} else {
 				throw new RuntimeException("Windows is not supported yet!")
 			}
 		}
 	}
 	
-	protected void test() {
-		context.stage('Run Test Suite') {
-
-			def POM_FILE = getSubProjectFolder() + "/pom.xml"
-
-			def BRANCH = Configurator.get("branch")
-            def BUILD_USER_ID = Configurator.get("BUILD_USER_ID")
-            def BUILD_USER_FIRST_NAME = Configurator.get("BUILD_USER_FIRST_NAME")
-            def BUILD_USER_LAST_NAME = Configurator.get("BUILD_USER_LAST_NAME")
-            def BUILD_USER_EMAIL = Configurator.get("BUILD_USER_EMAIL")
-			
-			def JOB_URL = Configurator.get(Configurator.Parameter.JOB_URL)
-			def BUILD_NUMBER = Configurator.get(Configurator.Parameter.BUILD_NUMBER)
-			Configurator.set("ci_url", JOB_URL)
-			Configurator.set("ci_build", BUILD_NUMBER)
-			
-            //TODO: remove git_branch after update ZafiraListener: https://github.com/qaprosoft/zafira/issues/760
-			Configurator.set("git_branch", BRANCH)
-			Configurator.set("scm_branch", BRANCH)
-
-			def DEFAULT_BASE_MAVEN_GOALS = "-Dcarina-core_version=${Configurator.get(Configurator.Parameter.CARINA_CORE_VERSION)} \
--f ${POM_FILE} \
--Dmaven.test.failure.ignore=true \
--Dcore_log_level=${Configurator.get(Configurator.Parameter.CORE_LOG_LEVEL)} \
--Dselenium_host=${Configurator.get(Configurator.Parameter.SELENIUM_URL)} \
--Dmax_screen_history=1 -Dinit_retry_count=0 -Dinit_retry_interval=10 \
--Dzafira_enabled=true \
--Dzafira_rerun_failures=${Configurator.get("rerun_failures")} \
--Dzafira_service_url=${Configurator.get(Configurator.Parameter.ZAFIRA_SERVICE_URL)} \
--Dzafira_access_token=${Configurator.get(Configurator.Parameter.ZAFIRA_ACCESS_TOKEN)} \
--Dzafira_report_folder=\"${ZAFIRA_REPORT_FOLDER}\" \
--Dreport_url=\"$JOB_URL$BUILD_NUMBER/${etafReportEncoded}\" \
--Dgit_branch=$BRANCH \
--Dgit_commit=${Configurator.get("GIT_COMMIT")} \
--Dgit_url=${Configurator.get("git_url")} \
--Dci_url=\"${JOB_URL}\" \
--Dci_build=\"${BUILD_NUMBER}\" \
--Dci_user_id=\"$BUILD_USER_ID\" \
--Dci_user_first_name=\"$BUILD_USER_FIRST_NAME\" \
--Dci_user_last_name=\"$BUILD_USER_LAST_NAME\" \
--Dci_user_email=\"$BUILD_USER_EMAIL\" \
--Duser.timezone=${Configurator.get(Configurator.Parameter.TIMEZONE)} \
-clean test"
-
-			//TODO: move 8000 port into the global var
-			def mavenDebug=" -Dmaven.surefire.debug=\"-Xdebug -Xrunjdwp:transport=dt_socket,server=y,suspend=y,address=8000 -Xnoagent -Djava.compiler=NONE\" "
-
-			Configurator.set("zafira_enabled", zc.isAvailable().toString())
-			
-
-
-			//TODO: determine correctly ci_build_cause (HUMAN, TIMER/SCHEDULE or UPSTREAM_JOB using jenkins pipeline functionality
-
-			//for now register only UPSTREAM_JOB cause when ci_parent_url and ci_parent_build not empty
-			if (!Configurator.get("ci_parent_url").isEmpty() && !Configurator.get("ci_parent_build").isEmpty()) {
-				Configurator.set("ci_build_cause", "UPSTREAMTRIGGER")
-			}
-
-			def goals = Configurator.resolveVars(DEFAULT_BASE_MAVEN_GOALS)
-
-			//register all obligatory vars
-			Configurator.getVars().each { k, v -> goals = goals + " -D${k}=\"${v}\""}
-			
-			//register all params after vars to be able to override
-            Configurator.getParams().each { k, v -> goals = goals + " -D${k}=\"${v}\""}
-
-			//TODO: make sure that jobdsl adds for UI tests boolean args: "capabilities.enableVNC and capabilities.enableVideo"
-			if (Configurator.get("enableVNC") && Configurator.get("enableVNC").toBoolean()) {
-				goals += " -Dcapabilities.enableVNC=true "
-			}
-
-			if (Configurator.get("enableVideo") && Configurator.get("enableVideo").toBoolean()) {
-				goals += " -Dcapabilities.enableVideo=true "
-			}
-
-			if (Configurator.get(Configurator.Parameter.JACOCO_ENABLE).toBoolean()) {
-				goals += " jacoco:instrument "
-			}
-
-			if (Configurator.get("debug") && Configurator.get("debug").toBoolean()) {
-				context.echo "Enabling remote debug..."
-				goals += mavenDebug
-			}
-			
-			if (Configurator.get("deploy_to_local_repo") && Configurator.get("deploy_to_local_repo").toBoolean()) {
-				context.echo "Enabling deployment of tests jar to local repo."
-				goals += " install"
-			}
-			
-			//append again overrideFields to make sure they are declared at the end
-			goals = goals + " " + Configurator.get("overrideFields")
-
-			context.echo "goals: ${goals}"
-
-			//TODO: adjust ZAFIRA_REPORT_FOLDER correclty
-			if (context.isUnix()) {
-				def suiteNameForUnix = Configurator.get("suite").replace("\\", "/")
-				context.echo "Suite for Unix: ${suiteNameForUnix}"
-				context.sh "'mvn' -B -U ${goals} -Dsuite=${suiteNameForUnix}"
-			} else {
-				def suiteNameForWindows = Configurator.get("suite").replace("/", "\\")
-				context.echo "Suite for Windows: ${suiteNameForWindows}"
-				context.bat "mvn -B -U ${mvnBaseGoals} -Dsuite=${suiteNameForWindows}"
-			}
-
-		}
-	}
-
 	protected String chooseNode() {
 		Configurator.set("node", "app")
 		context.echo "node: " + Configurator.get("node")
@@ -385,29 +260,6 @@ clean test"
 		return subProjectFolder
 	}
 
-	//TODO: move into valid jacoco related package
-	protected void publishJacocoReport() {
-		def JACOCO_ENABLE = Configurator.get(Configurator.Parameter.JACOCO_ENABLE).toBoolean()
-		if (!JACOCO_ENABLE) {
-			context.println("do not publish any content to AWS S3 if integration is disabled")
-			return
-		}
-
-		def JACOCO_BUCKET = Configurator.get(Configurator.Parameter.JACOCO_BUCKET)
-		def JOB_NAME = Configurator.get(Configurator.Parameter.JOB_NAME)
-		def BUILD_NUMBER = Configurator.get(Configurator.Parameter.BUILD_NUMBER)
-
-		def files = context.findFiles(glob: '**/jacoco.exec')
-		if(files.length == 1) {
-			context.archiveArtifacts artifacts: '**/jacoco.exec', fingerprint: true, allowEmptyArchive: true
-			// https://github.com/jenkinsci/pipeline-aws-plugin#s3upload
-			//TODO: move region 'us-west-1' into the global var 'JACOCO_REGION'
-			context.withAWS(region: 'us-west-1',credentials:'aws-jacoco-token') {
-				context.s3Upload(bucket:"$JACOCO_BUCKET", path:"$JOB_NAME/$BUILD_NUMBER/jacoco-it.exec", includePathPattern:'**/jacoco.exec')
-			}
-		}
-	}
-	
 	protected void reportingResults() {
 		context.stage('Results') {
 			publishReport('**/reports/qa/emailable-report.html', "${etafReport}")
@@ -479,216 +331,4 @@ clean test"
 		}
 	}
 	
-	@NonCPS
-	protected def sortPipelineList(List pipelinesList) {
-		context.println("Finished Dynamic Mapping: " + pipelinesList.dump())
-		pipelinesList = pipelinesList.sort { map1, map2 -> !map1.order ? !map2.order ? 0 : 1 : !map2.order ? -1 : map1.order.toInteger() <=> map2.order.toInteger() }
-		context.println("Finished Dynamic Mapping Sorted Order: " + pipelinesList.dump())
-		return pipelinesList
-		
-	}
-
-	protected void parsePipeline(String filePath) {
-		//context.println("filePath: " + filePath)
-		XmlSuite currentSuite = parseSuite(filePath)
-		
-		def jobName = currentSuite.getParameter("jenkinsJobName").toString()
-		def supportedPipelines = currentSuite.getParameter("jenkinsRegressionPipeline").toString() 
-		def orderNum = currentSuite.getParameter("jenkinsJobExecutionOrder").toString()
-		if (orderNum.equals("null")) {
-			orderNum = "0"
-			context.println("specify by default '0' order - start asap")
-		}
-		def executionMode = currentSuite.getParameter("jenkinsJobExecutionMode").toString()
-
-		def supportedEnvs = currentSuite.getParameter("jenkinsPipelineEnvironments").toString()
-		
-		def currentEnv = Configurator.get("env")
-		def pipelineJobName = Configurator.get(Configurator.Parameter.JOB_BASE_NAME)
-
-		// override suite email_list from params if defined
-		def emailList = currentSuite.getParameter("jenkinsEmail").toString()
-		def paramEmailList = Configurator.get("email_list")
-		if (paramEmailList != null && !paramEmailList.isEmpty()) {
-			emailList = paramEmailList
-		}
-		
-		def priorityNum = "5"
-		def curPriorityNum = Configurator.get("priority")
-		if (curPriorityNum != null && !curPriorityNum.isEmpty()) {
-			priorityNum = curPriorityNum //lowest priority for pipeline/cron jobs. So manually started jobs has higher priority among CI queue
-		}
-		
-		
-		def supportedBrowsers = currentSuite.getParameter("jenkinsPipelineBrowsers").toString()
-		String logLine = "pipelineJobName: ${pipelineJobName};\n	supportedPipelines: ${supportedPipelines};\n	jobName: ${jobName};\n	orderNum: ${orderNum};\n	email_list: ${emailList};\n	supportedEnvs: ${supportedEnvs};\n	currentEnv: ${currentEnv};\n	supportedBrowsers: ${supportedBrowsers};\n"
-		
-		def currentBrowser = Configurator.get("browser")
-		if (currentBrowser == null || currentBrowser.isEmpty()) {
-			currentBrowser = "NULL"
-		}
-		logLine += "	currentBrowser: ${currentBrowser};\n"
-		context.println(logLine)
-		
-		if (!supportedPipelines.contains("null")) {
-			for (def pipeName : supportedPipelines.split(",")) {
-				if (!pipelineJobName.equals(pipeName)) {
-					//launch test only if current pipeName exists among supportedPipelines 
-					continue;
-				}
-
-				for (def supportedEnv : supportedEnvs.split(",")) {
-					//context.println("supportedEnv: " + supportedEnv)
-					if (!currentEnv.equals(supportedEnv) && !currentEnv.toString().equals("null")) {
-						//context.println("Skip execution for env: ${supportedEnv}; currentEnv: ${currentEnv}")
-						//launch test only if current suite support cron regression execution for current env
-						continue;
-					}
-
-
-					for (def supportedBrowser : supportedBrowsers.split(",")) {
-						// supportedBrowsers - list of supported browsers for suite which are declared in testng suite xml file
-						// supportedBrowser - splitted single browser name from supportedBrowsers
-
-						// currentBrowser - explicilty selected browser on cron/pipeline level to execute tests
-
-						//context.println("supportedBrowser: ${supportedBrowser}; currentBrowser: ${currentBrowser}; ")
-						if (!currentBrowser.equals(supportedBrowser) && !currentBrowser.toString().equals("NULL")) {
-							//context.println("Skip execution for browser: ${supportedBrowser}; currentBrowser: ${currentBrowser}")
-							continue;
-						}
-						
-						//context.println("adding ${filePath} suite to pipeline run...")
-
-						def pipelineMap = [:]
-
-						def branch = Configurator.get("branch")
-						def ci_parent_url = Configurator.get("ci_parent_url")
-						if (ci_parent_url.isEmpty()) {
-							ci_parent_url = Configurator.get(Configurator.Parameter.JOB_URL)
-						}
-						def ci_parent_build = Configurator.get("ci_parent_build")
-						if (ci_parent_build.isEmpty()) {
-							ci_parent_build = Configurator.get(Configurator.Parameter.BUILD_NUMBER)
-						}
-						def retry_count = Configurator.get("retry_count")
-						def thread_count = Configurator.get("thread_count")
-
-						pipelineMap.put("browser", supportedBrowser)
-						pipelineMap.put("name", pipeName)
-						pipelineMap.put("branch", branch)
-						pipelineMap.put("ci_parent_url", ci_parent_url)
-						pipelineMap.put("ci_parent_build", ci_parent_build)
-						pipelineMap.put("retry_count", retry_count)
-						pipelineMap.put("thread_count", thread_count)
-						pipelineMap.put("jobName", jobName)
-						pipelineMap.put("environment", supportedEnv)
-						pipelineMap.put("order", orderNum)
-						pipelineMap.put("priority", priorityNum)
-						pipelineMap.put("emailList", emailList.replace(", ", ","))
-						pipelineMap.put("executionMode", executionMode.replace(", ", ","))
-
-						//context.println("initialized ${filePath} suite to pipeline run...")
-						//context.println("pipelines size1: " + listPipelines.size())
-						listPipelines.add(pipelineMap)
-						//context.println("pipelines size2: " + listPipelines.size())
-					}
-
-				}
-			}
-		}
-	}
-
-	protected def executeStages(String folderName) {
-		//    for (Map entry : sortedPipeline) {
-		//	buildOutStage(folderName, entry, false)
-		//    }
-
-		def mappedStages = [:]
-
-		boolean parallelMode = true
-
-		//combine jobs with similar priority into the single paralle stage and after that each stage execute in parallel
-		String beginOrder = "0"
-		String curOrder = ""
-		for (Map entry : listPipelines) {
-			def stageName = String.format("Stage: %s Environment: %s Browser: %s", entry.get("jobName"), entry.get("environment"), entry.get("browser"))
-			context.println("stageName: ${stageName}")
-			
-			boolean propagateJob = true
-			if (entry.get("executionMode").toString().contains("continue")) {
-				//do not interrupt pipeline/cron if any child job failed
-				propagateJob = false
-			}
-			if (entry.get("executionMode").toString().contains("abort")) {
-				//interrupt pipeline/cron and return fail status to piepeline if any child job failed
-				propagateJob = true
-			}
-
-			curOrder = entry.get("order")
-			//context.println("beginOrder: ${beginOrder}; curOrder: ${curOrder}")
-			
-			// do not wait results for jobs with default order "0". For all the rest we should wait results between phases
-			boolean waitJob = false
-			if (curOrder.toInteger() > 0) {
-				waitJob = true
-			}
-			
-			if (curOrder.equals(beginOrder)) {
-				//context.println("colect into order: ${curOrder}; job: ${stageName}")
-				mappedStages[stageName] = buildOutStages(folderName, entry, waitJob, propagateJob)
-			} else {
-				context.parallel mappedStages
-				
-				//reset mappedStages to empty after execution
-				mappedStages = [:]
-				beginOrder = curOrder
-				
-				//add existing pipeline as new one in the current stage
-				mappedStages[stageName] = buildOutStages(folderName, entry, waitJob, propagateJob)
-			}
-		}
-		
-		if (!mappedStages.isEmpty()) {
-			//context.println("launch jobs with order: ${curOrder}")
-			context.parallel mappedStages
-		}
-
-	}
-	
-	def buildOutStages(String folderName, Map entry, boolean waitJob, boolean propagateJob) {
-		return {
-			buildOutStage(folderName, entry, waitJob, propagateJob)
-		}
-	}
-	
-	protected def buildOutStage(String folderName, Map entry, boolean waitJob, boolean propagateJob) {
-		context.stage(String.format("Stage: %s Environment: %s Browser: %s", entry.get("jobName"), entry.get("environment"), entry.get("browser"))) {
-			//context.println("Dynamic Stage Created For: " + entry.get("jobName"))
-			//context.println("Checking EmailList: " + entry.get("emailList"))
-			
-			def email_list = entry.get("email_list")
-			def ADMIN_EMAILS = Configurator.get("email_list")
-
-			//context.println("propagate: " + propagateJob)
-			try {
-				if (!entry.get("browser").isEmpty()) {
-					context.build job: folderName + "/" + entry.get("jobName"),
-						propagate: propagateJob,
-						parameters: [context.string(name: 'branch', value: entry.get("branch")), context.string(name: 'env', value: entry.get("environment")), context.string(name: 'browser', value: entry.get("browser")), context.string(name: 'ci_parent_url', value: entry.get("ci_parent_url")), context.string(name: 'ci_parent_build', value: entry.get("ci_parent_build")), context.string(name: 'email_list', value: entry.get("emailList")), context.string(name: 'thread_count', value: entry.get("thread_count")), context.string(name: 'retry_count', value: entry.get("retry_count")), context.string(name: 'BuildPriority', value: entry.get("priority")),],
-						wait: waitJob
-				} else {
-					context.build job: folderName + "/" + entry.get("jobName"),
-						propagate: propagateJob,
-						parameters: [context.string(name: 'branch', value: entry.get("branch")), context.string(name: 'env', value: entry.get("environment")), context.string(name: 'ci_parent_url', value: entry.get("ci_parent_url")), context.string(name: 'ci_parent_build', value: entry.get("ci_parent_build")), context.string(name: 'email_list', value: entry.get("emailList")), context.string(name: 'thread_count', value: entry.get("thread_count")), context.string(name: 'retry_count', value: entry.get("retry_count")), context.string(name: 'BuildPriority', value: entry.get("priority")),],
-						wait: waitJob
-				}
-			} catch (Exception ex) {
-				printStackTrace(ex)
-				
-				context.emailext attachLog: true, body: "Unable to start job via cron! " + ex.getMessage(), recipientProviders: [[$class: 'DevelopersRecipientProvider'], [$class: 'RequesterRecipientProvider']], subject: "JOBSTART FAILURE: ${entry.get("jobName")}", to: "${email_list},${ADMIN_EMAILS}"
-			}
-
-		}
-	}
 }
