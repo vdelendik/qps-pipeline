@@ -34,71 +34,22 @@ class Runner extends Executor {
 		scmClient = new GitHub(context)
 	}
 	
-	public void runCron() {
-		def nodeName = "master"
-		//TODO: remove master node assignment
-		context.node(nodeName) {
-			scmClient.clone()
-
-			def WORKSPACE = this.getWorkspace()
-			context.println("WORKSPACE: " + WORKSPACE)
-			def project = Configurator.get("project")
-			def sub_project = Configurator.get("sub_project")
-			def jenkinsFile = ".jenkinsfile.json"
-
-			if (!context.fileExists("${jenkinsFile}")) {
-				context.println("no .jenkinsfile.json discovered! Scannr will use default qps-pipeline logic for project: ${project}")
-			}
-
-			def suiteFilter = "src/test/resources/**"
-			Object subProjects = this.parseJSON(WORKSPACE + "/" + jenkinsFile).sub_projects
-			subProjects.each {
-				listPipelines = []
-				suiteFilter = it.suite_filter
-				sub_project = it.name
-
-				def subProjectFilter = sub_project
-				if (sub_project.equals(".")) {
-					subProjectFilter = "**"
-				}
-
-				def files = context.findFiles(glob: subProjectFilter + "/" + suiteFilter + "/**")
-				if(files.length > 0) {
-					context.println("Number of Test Suites to Scan Through: " + files.length)
-					for (int i = 0; i < files.length; i++) {
-						this.parsePipeline(WORKSPACE + "/" + files[i].path)
-					}
-
-					listPipelines = sortPipelineList(listPipelines)
-
-					this.executeStages(folderName)
-				} else {
-					context.println("No Test Suites Found to Scan...")
-				}
-			}
-		}
-	}
-
-
 	public void runJob() {
         uuid = getUUID()
         String nodeName = "master"
-        String emailList = Configurator.get("email_list")
-        String failureEmailList = Configurator.get("failure_email_list")
-        String ZAFIRA_SERVICE_URL = Configurator.get(Configurator.Parameter.ZAFIRA_SERVICE_URL)
-        String ZAFIRA_ACCESS_TOKEN = Configurator.get(Configurator.Parameter.ZAFIRA_ACCESS_TOKEN)
-        boolean DEVELOP = Configurator.get("develop").toBoolean()
+//        String ZAFIRA_SERVICE_URL = Configurator.get(Configurator.Parameter.ZAFIRA_SERVICE_URL)
+//        String ZAFIRA_ACCESS_TOKEN = Configurator.get(Configurator.Parameter.ZAFIRA_ACCESS_TOKEN)
 
         //TODO: remove master node assignment
 		context.node(nodeName) {
-			// init ZafiraClient to register queued run and abort it at the end of the run pipeline
-			try {
-				zc = new ZafiraClient(context, ZAFIRA_SERVICE_URL, DEVELOP)
-				def token = zc.getZafiraAuthToken(ZAFIRA_ACCESS_TOKEN)
-                zc.queueZafiraTestRun(uuid)
-			} catch (Exception ex) {
-				printStackTrace(ex)
-			}
+//			// init ZafiraClient to register queued run and abort it at the end of the run pipeline
+//			try {
+//				zc = new ZafiraClient(context, ZAFIRA_SERVICE_URL, DEVELOP)
+//				def token = zc.getZafiraAuthToken(ZAFIRA_ACCESS_TOKEN)
+//                zc.queueZafiraTestRun(uuid)
+//			} catch (Exception ex) {
+//				printStackTrace(ex)
+//			}
 			nodeName = chooseNode()
 		}
 
@@ -115,6 +66,7 @@ class Runner extends Executor {
 						def timeoutValue = Configurator.get(Configurator.Parameter.JOB_MAX_RUN_TIME)
 						context.timeout(time: timeoutValue.toInteger(), unit: 'MINUTES') {
 							  this.build()
+							  //this.test()
 						}
 
 						//TODO: think about seperate stage for uploading jacoco reports
@@ -166,21 +118,15 @@ class Runner extends Executor {
 		String CARINA_CORE_VERSION = Configurator.get(Configurator.Parameter.CARINA_CORE_VERSION)
 		String suite = Configurator.get("suite")
 		String branch = Configurator.get("branch")
-		String env = Configurator.get("env")
-        //TODO: rename to devicePool
-		String device = Configurator.get("DEVICE")
 		String browser = Configurator.get("browser")
 
 		//TODO: improve carina to detect browser_version on the fly
 		String browser_version = Configurator.get("browser_version")
 
 		context.stage('Preparation') {
-			currentBuild.displayName = "#${BUILD_NUMBER}|${suite}|${env}|${branch}"
+			currentBuild.displayName = "#${BUILD_NUMBER}|${suite}|${branch}"
 			if (!isParamEmpty("${CARINA_CORE_VERSION}")) {
 				currentBuild.displayName += "|" + "${CARINA_CORE_VERSION}"
-			}
-			if (!isParamEmpty(Configurator.get("device"))) {
-				currentBuild.displayName += "|${device}"
 			}
 			if (!isParamEmpty(Configurator.get("browser"))) {
 				currentBuild.displayName += "|${browser}"
@@ -189,92 +135,7 @@ class Runner extends Executor {
 				currentBuild.displayName += "|${browser_version}"
 			}
 			currentBuild.description = "${suite}"
-			
-			// identify if it is mobile test using "device" param. Don't reuse node as it can be changed based on client needs 
-			if (isMobile()) {
-				//this is mobile test
-				this.prepareForMobile()
-			}
 		}
-	}
-
-	protected boolean isMobile() {
-		def platform = Configurator.get("platform")
-		return platform.equalsIgnoreCase("android") || platform.equalsIgnoreCase("ios")
-	}
-	
-	protected void prepareForMobile(params) {
-		def devicePool = Configurator.get("devicePool")
-		def defaultPool = Configurator.get("DefaultPool")
-		def platform = Configurator.get("platform")
-
-		if (platform.equalsIgnoreCase("android")) {
-			prepareForAndroid()
-		} else if (platform.equalsIgnoreCase("ios")) {
-			prepareForiOS()
-		} else {
-			context.echo "Unable to identify mobile platform: ${platform}"
-		}
-
-		//geeral mobile capabilities
-		//TODO: find valid way for naming this global "MOBILE" quota
-		params.put("capabilities.deviceName", "QPS-HUB")
-		if ("DefaultPool".equalsIgnoreCase(devicePool)) {
-			//reuse list of devices from hidden parameter DefaultPool
-			Configurator.set("capabilities.devicePool", defaultPool)
-		} else {
-			Configurator.set("capabilities.devicePool", devicePool)
-		}
-		
-		// ATTENTION! Obligatory remove device from the params otherwise
-		// hudson.remoting.Channel$CallSiteStackTrace: Remote call to JNLP4-connect connection from qpsinfra_jenkins-slave_1.qpsinfra_default/172.19.0.9:39487
-		// Caused: java.io.IOException: remote file operation failed: /opt/jenkins/workspace/Automation/<JOB_NAME> at hudson.remoting.Channel@2834589:JNLP4-connect connection from
-    Configurator.remove("device")
-
-		//TODO: move it to the global jenkins variable
-		Configurator.set("capabilities.newCommandTimeout", "180")
-		Configurator.set("java.awt.headless", "true")
-
-	}
-
-	protected void prepareForAndroid() {
-		Configurator.set("mobile_app_clear_cache", "true")
-
-		Configurator.set("capabilities.platformName", "ANDROID")
-
-		Configurator.set("capabilities.autoGrantPermissions", "true")
-		Configurator.set("capabilities.noSign", "true")
-		Configurator.set("capabilities.STF_ENABLED", "true")
-
-		Configurator.set("capabilities.appWaitDuration", "270000")
-		Configurator.set("capabilities.androidInstallTimeout", "270000")
-
-		customPrepareForAndroid()
-	}
-
-	protected void customPrepareForAndroid() {
-		//do nothing here
-	}
-
-
-	protected void prepareForiOS() {
-
-		Configurator.set("capabilities.platform", "IOS")
-		Configurator.set("capabilities.platformName", "IOS")
-		Configurator.set("capabilities.deviceName", "*")
-
-		Configurator.set("capabilities.appPackage", "")
-		Configurator.set("capabilities.appActivity", "")
-
-		Configurator.set("capabilities.autoAcceptAlerts", "true")
-
-		Configurator.set("capabilities.STF_ENABLED", "false")
-
-		customPrepareForiOS()
-	}
-
-	protected void customPrepareForiOS() {
-		//do nothing here
 	}
 
 	protected void downloadResources() {
@@ -299,6 +160,18 @@ class Runner extends Executor {
 	}
 
 	protected void build() {
+		context.stage('Build Stage') {
+			if (context.isUnix()) {
+				context.sh "cd docker_env"
+				context.sh "docker-compose down"
+				context.sh "docker-compose up -d --build php-fpm apache2"
+			} else {
+				throw new RuntimeException("Windows is not supported yet!")
+			}
+		}
+	}
+	
+	protected void test() {
 		context.stage('Run Test Suite') {
 
 			def POM_FILE = getSubProjectFolder() + "/pom.xml"
@@ -407,36 +280,7 @@ clean test"
 	}
 
 	protected String chooseNode() {
-		def platform = Configurator.get("platform")
-		def browser = Configurator.get("browser")
-
-        Configurator.set("node", "master") //master is default node to execute job
-
-		//TODO: handle browserstack etc integration here?
-		switch(platform.toLowerCase()) {
-			case "api":
-				context.println("Suite Type: API")
-				Configurator.set("node", "api")
-				Configurator.set("browser", "NULL")
-				break;
-			case "android":
-				context.println("Suite Type: ANDROID")
-				Configurator.set("node", "android")
-				break;
-			case "ios":
-				//TODO: Need to improve this to be able to handle where emulator vs. physical tests should be run.
-				context.println("Suite Type: iOS")
-				Configurator.set("node", "ios")
-				break;
-			default:
-				if ("NULL".equals(browser)) {
-					context.println("Suite Type: Default")
-					Configurator.set("node", "master")
-				} else {
-					context.println("Suite Type: Web")
-					Configurator.set("node", "web")
-				}
-		}
+		Configurator.set("node", "app")
 		context.echo "node: " + Configurator.get("node")
 		return Configurator.get("node")
 	}
