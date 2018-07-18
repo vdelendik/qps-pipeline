@@ -141,11 +141,7 @@ class Runner extends Executor {
 	protected void build() {
 		context.stage('Build Stage') {
 			if (context.isUnix()) {
-				context.sh "pwd && cd ${getWorkspace()}/docker_env && pwd"
-				
-				//context.sh "cd docker_env"
-				//context.sh "docker-compose down"
-				//context.sh "docker-compose up -d --build php-fpm apache2"
+				context.sh "pwd && cd ${getWorkspace()}/docker_env && pwd && docker-compose down && docker-compose up -d --build php-fpm apache2"
 			} else {
 				throw new RuntimeException("Windows is not supported yet!")
 			}
