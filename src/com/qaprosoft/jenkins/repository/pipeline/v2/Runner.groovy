@@ -78,9 +78,9 @@ class Runner extends Executor {
 					throw ex
 				} finally {
 //                    this.exportZafiraReport()
-                    this.reportingResults()
-                    //TODO: send notification via email, slack, hipchat and whatever... based on subscrpition rules
-                    this.sendTestRunResultsEmail(emailList, failureEmailList)
+//                    this.reportingResults()
+//                    //TODO: send notification via email, slack, hipchat and whatever... based on subscrpition rules
+//                    this.sendTestRunResultsEmail(emailList, failureEmailList)
 //                    this.clean()
                 }
 			}
@@ -141,9 +141,7 @@ class Runner extends Executor {
 	protected void build() {
 		context.stage('Build Stage') {
 			if (context.isUnix()) {
-				context.sh "pwd"
-				context.sh "cd ${getWorkspace()}/docker_env"
-				context.sh "pwd"
+				context.sh "pwd && cd ${getWorkspace()}/docker_env && pwd"
 				
 				//context.sh "cd docker_env"
 				//context.sh "docker-compose down"
