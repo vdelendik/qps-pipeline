@@ -473,6 +473,7 @@ class Runner extends Executor {
 					${etafReport}: ${JOB_URL}${BUILD_NUMBER}/${etafReportEncoded}<br>
 					Console: ${JOB_URL}${BUILD_NUMBER}/console"""
 
+		String ADMIN_EMAILS = vars.get("ADMIN_EMAILS")
 		//TODO: enable emailing but seems like it should be moved to the notification code
 		//context.emailext attachLog: true, body: "${body}", recipientProviders: [[$class: 'DevelopersRecipientProvider'], [$class: 'RequesterRecipientProvider']], subject: "${subject}", to: "${email_list}"
 		context.emailext attachLog: true, body: "${body}", recipientProviders: [[$class: 'DevelopersRecipientProvider'], [$class: 'RequesterRecipientProvider']], subject: "${subject}", to: "${email_list},${ADMIN_EMAILS}"
