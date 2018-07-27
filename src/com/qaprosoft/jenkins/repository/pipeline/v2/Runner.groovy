@@ -411,6 +411,10 @@ class Runner extends Executor {
 				}
 		}
 		
+		if (params.get("custom_capabilities").contains("browserstack")) {
+			context.println("overriding default node to: browserstack")
+			params.put("node", "browserstack")
+		}
 		def nodeLabel = params.get("node_label")
 		context.println("nodeLabel: " + nodeLabel)
 		if (!isParamEmpty(nodeLabel)) {
