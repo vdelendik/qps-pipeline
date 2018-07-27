@@ -359,7 +359,7 @@ class Runner extends Executor {
 			}
 			
 			//append again overrideFields to make sure they are declared at the end
-			goals += params.get("overrideFields")
+			goals = goals + " " + params.get("overrideFields")
 			
 			context.echo "goals: ${goals}"
 			
