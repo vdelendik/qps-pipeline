@@ -298,6 +298,7 @@ class Runner extends Executor {
 			def CORE_LOG_LEVEL = vars.get("CORE_LOG_LEVEL")
 			def SELENIUM_URL = vars.get("SELENIUM_URL")
 			def SELENIUM_HOST = vars.get("SELENIUM_HOST")
+			def QPS_HOST = vars.get("QPS_HOST")
 			
 			def ZAFIRA_BASE_CONFIG = vars.get("ZAFIRA_BASE_CONFIG")
 			
