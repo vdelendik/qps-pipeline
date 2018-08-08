@@ -318,7 +318,8 @@ class Runner extends Executor {
 				-Dcore_log_level=$CORE_LOG_LEVEL -Dmaven.test.failure.ignore=true -Dselenium_host=$SELENIUM_URL -Dmax_screen_history=1 \
 				-Dinit_retry_count=0 -Dinit_retry_interval=10 $ZAFIRA_BASE_CONFIG -Duser.timezone=PST -Dcapabilities.browserstack.local=true clean test" //-Duser.timezone=PST
 			
-			DEFAULT_BASE_MAVEN_GOALS += " -Dcapabilities.enableVideo=true -Dscreen_record_host=https://${QPS_HOST}/video/%s.mp4 -Dvnc_protocol=wss -Dvnc_host=${SELENIUM_HOST} -Dvnc_port=443 "
+			DEFAULT_BASE_MAVEN_GOALS += " -Dvnc_protocol=wss -Dvnc_host=${SELENIUM_HOST} -Dvnc_port=443 "
+			//-Dcapabilities.enableVideo=true -Dscreen_record_host=https://${QPS_HOST}/video/%s.mp4
 			
 			//TODO: move 8000 port into the global var
 			def mavenDebug=" -Dmaven.surefire.debug=\"-Xdebug -Xrunjdwp:transport=dt_socket,server=y,suspend=y,address=8000 -Xnoagent -Djava.compiler=NONE\" "
